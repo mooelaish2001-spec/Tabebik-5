@@ -1,6 +1,6 @@
 workflows:
   android-workflow:
-    name: Tabebik-5 Android
+    name: tabebik_user Android
     instance_type: mac_mini_m1
     max_build_duration: 20
     environment:
@@ -9,8 +9,10 @@ workflows:
       - name: Fix Android folder
         script: |
           flutter clean
-          flutter create . --platforms=android
+          rm -rf android
+          flutter create . --org com.tabebik --project-name tabebik_user --platforms=android
           flutter pub get
+          
       - name: Build APK
         script: |
           flutter build apk --release
