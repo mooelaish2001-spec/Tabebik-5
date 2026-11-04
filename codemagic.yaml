@@ -9,7 +9,6 @@ workflows:
       - name: Fix Android folder
         script: |
           flutter clean
-          rm -rf android
           flutter create . --org com.tabebik --project-name tabebik_user --platforms=android
           flutter pub get
           
