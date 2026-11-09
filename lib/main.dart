@@ -2355,7 +2355,7 @@ class _LoginState extends State<LoginScreen> {
   Future<void> send() async {
     if (!firebaseReady) {
       setState(() => err =
-          'خدمة التسجيل غير مهيأة حالياً. تحقق من إعدادات Firebase وملف google-services.json.');
+          'فشل تشغيل Firebase: ${firebaseInitError ?? 'سبب غير معروف'}. راجع سجل التشغيل (Codemagic logs).');
       return;
     }
     final n = normPhone(ph.text);
