@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'firebase_options.dart';
 
 /// حالة اتصال Firebase. التطبيق يستطيع عرض الواجهة حتى لو تعذر الاتصال بالخادم.
 bool firebaseReady = false;
@@ -1155,7 +1156,9 @@ Future<void> main() async {
 
   // لا نسمح لفشل تهيئة Firebase بمنع ظهور واجهة التطبيق.
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.android,
+    );
     firebaseReady = true;
     firebaseInitError = null;
     debugPrint('Tabibak: Firebase initialized successfully.');
