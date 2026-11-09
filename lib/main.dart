@@ -2345,6 +2345,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginState extends State<LoginScreen> {
   final ph = TextEditingController();
   String? err;
+  bool busy = false;
 
   @override
   void dispose() {
@@ -2390,6 +2391,23 @@ class _LoginState extends State<LoginScreen> {
     }
   }
 
+  Future<void> handleSend() async {
+    if (busy) return;
+    debugPrint('LOGIN_BUTTON_TAPPED');
+    setState(() {
+      busy = true;
+      err = null;
+    });
+    try {
+      await send();
+    } catch (e, st) {
+      debugPrint('LOGIN_SEND_UNHANDLED: $e\n$st');
+      if (mounted) setState(() => err = 'حدث خطأ أثناء التسجيل: $e');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Colors.white,
@@ -2404,7 +2422,40 @@ class _LoginState extends State<LoginScreen> {
                 if (err != null) setState(() => err = null);
               }),
               gap(20),
-              RedButton('موافقة ومتابعة', arrow: true, onTap: send),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: busy ? null : handleSend,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kRed,
+                    disabledBackgroundColor: const Color(0xFFD5DAE2),
+                    foregroundColor: Colors.white,
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                  child: busy
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('موافقة ومتابعة', style: t(16, c: Colors.white)),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                          ],
+                        ),
+                ),
+              ),
               gap(12),
               OutBtn('المتابعة كزائر', onTap: () => home(context)),
               gap(18),
