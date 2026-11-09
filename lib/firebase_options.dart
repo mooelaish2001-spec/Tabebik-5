@@ -13,21 +13,21 @@ class DefaultFirebaseOptions {
     }
   }
 
-  // انسخ ديل من google-services.json حقك
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSy_انسخ_من_current_key_هنا',
-    appId: '1:123456:android:انسخ_mobilesdk_app_id_هنا',
-    messagingSenderId: 'انسخ_الرقم_القبل_النقطتين_في_appId',
-    projectId: 'tabibak-xxxx_انسخ_project_id_هنا',
-    storageBucket: 'tabibak-xxxx.firebasestorage.app',
+    apiKey: 'AIzaSyA_9bYseIXkNAxuM3TQP9RXGUqCh37XPrk',
+    appId: '1:50266299347:android:193369d07a4006b9b32d26',
+    messagingSenderId: '50266299347',
+    projectId: 'tabibek-2f25e',
+    storageBucket: 'tabibek-2f25e.firebasestorage.app',
   );
 
+  // Replace these values with the iOS app values only if you build for iOS.
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'نفس_الـ_apiKey',
-    appId: 'نفس_الـ_appId',
-    messagingSenderId: 'نفس_الـ_messagingSenderId',
-    projectId: 'نفس_الـ_projectId',
-    storageBucket: 'نفس_الـ_storageBucket',
+    apiKey: 'REPLACE_WITH_IOS_API_KEY',
+    appId: 'REPLACE_WITH_IOS_APP_ID',
+    messagingSenderId: 'REPLACE_WITH_IOS_SENDER_ID',
+    projectId: 'tabibek-2f25e',
+    storageBucket: 'tabibek-2f25e.firebasestorage.app',
     iosBundleId: 'com.example.tabibak',
   );
 }
