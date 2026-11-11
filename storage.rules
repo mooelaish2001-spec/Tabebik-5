@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// قواعد Firebase Storage: إشعارات التحويل وتراخيص المراكز.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function booking(bid) {
+      return firestore.get(/databases/(default)/documents/bookings/$(bid)).data;
+    }
+    function isImage() {
+      return request.resource.size < 6 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+    }
+
+    // إشعار التحويل: يرفعه صاحب الحجز، ويراه هو ومستخدمو المركز المعني.
+    match /receipts/{bid}/{file} {
+      allow write: if request.auth != null && isImage() && booking(bid).patientUid == request.auth.uid;
+      allow read: if request.auth != null && (
+        booking(bid).patientUid == request.auth.uid
+        || firestore.get(/databases/(default)/documents/centerMembers/$(request.auth.token.phone_number)).data.centerId == booking(bid).centerId);
+    }
+
+    // ترخيص المركز: يُرفع عند التسجيل ولا يُقرأ إلا من لوحة Firebase (فريق طبيبك).
+    match /licenses/{file} {
+      allow write: if request.auth != null && isImage();
+      allow read: if false;
+    }
+  }
+}
