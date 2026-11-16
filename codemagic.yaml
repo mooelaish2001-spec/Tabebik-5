@@ -5,21 +5,42 @@ workflows:
     max_build_duration: 30
     environment:
       flutter: stable
+
     scripts:
-      - name: Regenerate complete Android project
+      - name: Regenerate Android project and preserve Firebase config
         script: |
           set -e
+
           mkdir -p /tmp/tabebik_firebase
-          cp android/app/google-services.json /tmp/tabebik_firebase/google-services.json
+          if [ -f android/app/google-services.json ]; then
+            cp android/app/google-services.json /tmp/tabebik_firebase/google-services.json
+          else
+            echo "ERROR: android/app/google-services.json is missing."
+            exit 1
+          fi
+
           rm -rf android
           flutter create . --platforms=android --org com.tabebik --project-name tabebik_user
+
           mkdir -p android/app
           cp /tmp/tabebik_firebase/google-services.json android/app/google-services.json
+
           flutter clean
           flutter pub get
-      - name: Build APK
+
+      - name: Build release APK
         script: |
           set -e
           flutter build apk --release
+
+      - name: Print Android SHA-1 and SHA-256 fingerprints
+        script: |
+          set -e
+          echo "========== TABEBIK ANDROID SIGNING FINGERPRINTS =========="
+          cd android
+          ./gradlew --no-daemon :app:signingReport
+          echo "========== END SIGNING FINGERPRINTS =========="
+
     artifacts:
       - build/**/outputs/**/*.apk
+      - build/**/outputs/**/output-metadata.json
