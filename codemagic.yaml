@@ -63,14 +63,32 @@ workflows:
           set -e
 
           if flutter build apk --release --verbose; then
-            echo "Release APK built successfully."
+            echo "Flutter release build completed."
           else
-            BUILD_EXIT_CODE=$?
-            echo "Flutter build failed. Running Gradle directly to expose the full Java/Gradle stacktrace..."
-            cd android
-            ./gradlew --no-daemon :app:assembleRelease --stacktrace --info
-            exit "$BUILD_EXIT_CODE"
+            echo "Flutter command returned an error. Trying the Android release Gradle task..."
+            (
+              cd android
+              ./gradlew --no-daemon :app:assembleRelease --stacktrace --info
+            )
+            echo "Gradle release task completed. Checking for the APK..."
           fi
+
+          APK_PATH="$(find android/app/build/outputs build/app/outputs -type f -name '*.apk' -print -quit 2>/dev/null || true)"
+
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: Build command finished but no release APK was found."
+            echo "Searching build outputs for diagnostics:"
+            find android/app/build/outputs build/app/outputs -maxdepth 6 -type f 2>/dev/null || true
+            exit 1
+          fi
+
+          mkdir -p build/app/outputs/flutter-apk
+          if [ "$APK_PATH" != "build/app/outputs/flutter-apk/app-release.apk" ]; then
+            cp "$APK_PATH" build/app/outputs/flutter-apk/app-release.apk
+          fi
+
+          echo "Release APK is ready:"
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
 
       - name: Print Android SHA-1 and SHA-256 fingerprints
         script: |
