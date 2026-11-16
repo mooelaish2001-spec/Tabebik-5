@@ -73,10 +73,10 @@ workflows:
             echo "Gradle release task completed. Checking for the APK..."
           fi
 
-          APK_PATH="$(find android/app/build/outputs build/app/outputs -type f -name '*.apk' -print -quit 2>/dev/null || true)"
+          APK_PATH="$(find android/app/build/outputs build/app/outputs -type f -name 'app-release.apk' -print -quit 2>/dev/null || true)"
 
           if [ -z "$APK_PATH" ]; then
-            echo "ERROR: Build command finished but no release APK was found."
+            echo "ERROR: Build command finished but no app-release.apk was found."
             echo "Searching build outputs for diagnostics:"
             find android/app/build/outputs build/app/outputs -maxdepth 6 -type f 2>/dev/null || true
             exit 1
