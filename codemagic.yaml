@@ -8,7 +8,7 @@ workflows:
       flutter: stable
 
     scripts:
-      - name: Prepare existing Android project
+      - name: Prepare existing Android project and Gradle Wrapper
         script: |
           set -e
 
@@ -22,14 +22,41 @@ workflows:
             exit 1
           fi
 
-          if [ ! -f android/gradlew ]; then
-            echo "ERROR: Android Gradle wrapper is missing."
-            exit 1
-          fi
-
-          chmod +x android/gradlew
           flutter clean
           flutter pub get
+
+          # Generate only the missing Gradle Wrapper files.
+          # This does NOT recreate or replace the Android project.
+          if [ ! -f android/gradlew ] || [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Gradle Wrapper is incomplete. Generating wrapper files..."
+
+            WRAPPER_VERSION="8.10.2"
+            TEMP_DIR="$(mktemp -d)"
+            mkdir -p "$TEMP_DIR/wrapper-project"
+
+            printf "rootProject.name = 'wrapper-bootstrap'\n" > "$TEMP_DIR/wrapper-project/settings.gradle"
+            touch "$TEMP_DIR/wrapper-project/build.gradle"
+
+            curl -fL "https://services.gradle.org/distributions/gradle-${WRAPPER_VERSION}-bin.zip" -o "$TEMP_DIR/gradle.zip"
+            unzip -q "$TEMP_DIR/gradle.zip" -d "$TEMP_DIR"
+
+            "$TEMP_DIR/gradle-${WRAPPER_VERSION}/bin/gradle" \
+              -p "$TEMP_DIR/wrapper-project" \
+              wrapper --gradle-version "$WRAPPER_VERSION" --distribution-type all
+
+            mkdir -p android/gradle/wrapper
+            cp "$TEMP_DIR/wrapper-project/gradlew" android/gradlew
+            cp "$TEMP_DIR/wrapper-project/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/
+            cp "$TEMP_DIR/wrapper-project/gradle/wrapper/gradle-wrapper.properties" android/gradle/wrapper/
+            chmod +x android/gradlew
+
+            rm -rf "$TEMP_DIR"
+          fi
+
+          if [ ! -f android/gradlew ] || [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "ERROR: Could not generate Gradle Wrapper."
+            exit 1
+          fi
 
       - name: Build release APK
         script: |
