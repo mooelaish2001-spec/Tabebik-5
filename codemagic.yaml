@@ -6,11 +6,17 @@ workflows:
 
     environment:
       flutter: stable
+      java: 21
 
     scripts:
       - name: Prepare existing Android project and Gradle Wrapper
         script: |
           set -e
+
+          echo "========== JAVA VERSION =========="
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "========== END JAVA VERSION =========="
 
           if [ ! -f android/app/google-services.json ]; then
             echo "ERROR: Firebase google-services.json is missing."
@@ -61,6 +67,13 @@ workflows:
       - name: Build release APK with detailed diagnostics
         script: |
           set -e
+
+          echo "========== BUILD JAVA VERSION =========="
+          java -version
+          cd android
+          ./gradlew --version
+          cd ..
+          echo "========== END BUILD JAVA VERSION =========="
 
           if flutter build apk --release --verbose; then
             echo "Flutter release build completed."
