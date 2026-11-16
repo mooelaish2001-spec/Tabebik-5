@@ -2447,7 +2447,15 @@ class _LoginState extends State<LoginScreen> {
           if (mounted) setState(() => busy = false);
         },
         codeAutoRetrievalTimeout: (verificationId) {
-          debugPrint('PHONE_AUTH_AUTO_RETRIEVAL_TIMEOUT');
+          phoneAuthWatchdog?.cancel();
+          debugPrint('PHONE_AUTH_AUTO_RETRIEVAL_TIMEOUT: verificationId received');
+          // Even if Android cannot auto-read the SMS, the verification ID
+          // can still be used with a manually entered test/received code.
+          otpKey.currentState?.setVerificationId(verificationId);
+          otpKey.currentState?.setSendError(
+            'انتهى التحقق التلقائي. إذا وصلك رمز SMS أدخله يدوياً.',
+          );
+          if (mounted) setState(() => busy = false);
         },
       );
     } on FirebaseAuthException catch (e) {
@@ -2484,9 +2492,11 @@ class _LoginState extends State<LoginScreen> {
     ));
 
     phoneAuthWatchdog?.cancel();
-    phoneAuthWatchdog = Timer(const Duration(seconds: 25), () {
+    // Firebase Phone Auth timeout is 60 seconds; allow the native
+    // verification callbacks to complete before showing a timeout message.
+    phoneAuthWatchdog = Timer(const Duration(seconds: 75), () {
       if (!mounted || !busy) return;
-      const message = 'لم يصل رد من Firebase خلال 25 ثانية. تحقق من إعدادات رقم الاختبار وSHA-1/SHA-256.';
+      const message = 'لم يكتمل التحقق من Firebase خلال 75 ثانية. ارجع وحاول مرة أخرى، وإذا ظهر خطأ محدد أرسله لنا.';
       otpKey.currentState?.setSendError(message);
       setState(() { busy = false; err = message; });
     });
