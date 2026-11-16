@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "50266299347",
+    "project_id": "tabibek-2f25e",
+    "storage_bucket": "tabibek-2f25e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:50266299347:android:193369d07a4006b9b32d26",
+        "android_client_info": {
+          "package_name": "com.tabebik.tabebik_user"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "50266299347-tjk3tmpfkpvfbe0ljb7jdv3kr5l6djo6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tabebik.tabebik_user",
+            "certificate_hash": "b7c64bda87eef65b4e5a3837f3035feb0b845e58"
+          }
+        },
+        {
+          "client_id": "50266299347-vom73t8jqdems6b09eh6m844agojmna5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_9bYseIXkNAxuM3TQP9RXGUqCh37XPrk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "50266299347-vom73t8jqdems6b09eh6m844agojmna5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
