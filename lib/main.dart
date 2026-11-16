@@ -2381,7 +2381,7 @@ class _LoginState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> send() async {
+  Future<void> send(GlobalKey<_OtpState> otpKey) async {
     if (!firebaseReady) {
       setState(() { busy = false; err =
           'فشل تشغيل Firebase: ${firebaseInitError ?? 'سبب غير معروف'}. راجع سجل التشغيل (Codemagic logs).'; });
@@ -2436,20 +2436,15 @@ class _LoginState extends State<LoginScreen> {
         verificationFailed: (e) {
           phoneAuthWatchdog?.cancel();
           debugPrint('PHONE_AUTH_VERIFICATION_FAILED: ${e.code} ${e.message}');
-          if (mounted) {
-            setState(() {
-              busy = false;
-              err = '${e.message ?? 'تعذر إرسال رمز التحقق'} [${e.code}]';
-            });
-          }
+          final message = '${e.message ?? 'تعذر إرسال رمز التحقق'} [${e.code}]';
+          otpKey.currentState?.setSendError(message);
+          if (mounted) setState(() { busy = false; err = message; });
         },
         codeSent: (verificationId, resendToken) {
           phoneAuthWatchdog?.cancel();
           debugPrint('PHONE_AUTH_CODE_SENT: $n');
-          if (mounted) {
-            setState(() => busy = false);
-            go(context, OtpScreen(n, verificationId: verificationId));
-          }
+          otpKey.currentState?.setVerificationId(verificationId);
+          if (mounted) setState(() => busy = false);
         },
         codeAutoRetrievalTimeout: (verificationId) {
           debugPrint('PHONE_AUTH_AUTO_RETRIEVAL_TIMEOUT');
@@ -2458,7 +2453,9 @@ class _LoginState extends State<LoginScreen> {
     } on FirebaseAuthException catch (e) {
       phoneAuthWatchdog?.cancel();
       debugPrint('PHONE_AUTH_SEND_ERROR: ${e.code} ${e.message}');
-      if (mounted) setState(() { busy = false; err = '${e.message ?? 'حدث خطأ في التحقق'} [${e.code}]'; });
+      final message = '${e.message ?? 'حدث خطأ في التحقق'} [${e.code}]';
+      otpKey.currentState?.setSendError(message);
+      if (mounted) setState(() { busy = false; err = message; });
     } catch (e) {
       phoneAuthWatchdog?.cancel();
       if (mounted) setState(() { busy = false; err = 'تعذر الاتصال بخدمة التحقق: $e'; });
@@ -2467,33 +2464,39 @@ class _LoginState extends State<LoginScreen> {
 
   Future<void> handleSend() async {
     if (busy) return;
-    debugPrint('LOGIN_BUTTON_TAPPED');
-    setState(() {
-      busy = true;
-      err = null;
-    });
+    final n = normPhone(ph.text);
+    if (n == null) {
+      setState(() => err = 'أدخل رقم هاتف سوداني صحيح (مثال: 912345678)');
+      return;
+    }
+    if (!firebaseReady) {
+      setState(() => err = 'خدمة Firebase غير جاهزة: ${firebaseInitError ?? 'تحقق من الإعدادات'}');
+      return;
+    }
 
-    // انتظر callback من Firebase؛ Future الخاص بـ verifyPhoneNumber
-    // قد ينتهي قبل وصول codeSent أو verificationFailed.
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    if (!mounted) return;
+    debugPrint('LOGIN_BUTTON_TAPPED');
+    setState(() { busy = true; err = null; });
+
+    // افتح صفحة الرمز فوراً، ثم ابدأ طلب التحقق في الخلفية.
+    final otpKey = GlobalKey<_OtpState>();
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => OtpScreen(n, verificationId: '', key: otpKey),
+    ));
 
     phoneAuthWatchdog?.cancel();
     phoneAuthWatchdog = Timer(const Duration(seconds: 25), () {
       if (!mounted || !busy) return;
-      debugPrint('PHONE_AUTH_CALLBACK_WATCHDOG_TIMEOUT');
-      setState(() {
-        busy = false;
-        err = 'لم يصل رد من خدمة Firebase خلال 25 ثانية. تحقق من إعدادات رقم الاختبار وSHA-1/SHA-256 واتصال الإنترنت.';
-      });
+      const message = 'لم يصل رد من Firebase خلال 25 ثانية. تحقق من إعدادات رقم الاختبار وSHA-1/SHA-256.';
+      otpKey.currentState?.setSendError(message);
+      setState(() { busy = false; err = message; });
     });
 
     try {
-      await send();
-      // لا نوقف التحميل هنا: verifyPhoneNumber قد يرجع قبل تنفيذ callback.
+      await send(otpKey);
     } catch (e, st) {
       phoneAuthWatchdog?.cancel();
       debugPrint('LOGIN_SEND_UNHANDLED: $e\n$st');
+      otpKey.currentState?.setSendError('حدث خطأ أثناء التسجيل: $e');
       if (mounted) setState(() { busy = false; err = 'حدث خطأ أثناء التسجيل: $e'; });
     }
   }
@@ -2578,6 +2581,19 @@ class _OtpState extends State<OtpScreen> {
   String demoCode = '';
   late String currentVerificationId;
 
+  void setVerificationId(String id) {
+    if (!mounted) return;
+    setState(() {
+      currentVerificationId = id;
+      err = null;
+    });
+  }
+
+  void setSendError(String message) {
+    if (!mounted) return;
+    setState(() => err = message);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -2603,6 +2619,10 @@ class _OtpState extends State<OtpScreen> {
     if (busy) return;
     if (!firebaseReady) {
       setState(() => err = 'خدمة التحقق غير متاحة بسبب إعدادات Firebase.');
+      return;
+    }
+    if (currentVerificationId.isEmpty) {
+      setState(() => err = 'جاري تجهيز التحقق من Firebase، انتظر قليلاً ثم أدخل الرمز.');
       return;
     }
     final code = cs.map((c) => latin(c.text)).join();
