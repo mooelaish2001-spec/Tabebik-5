@@ -2,7 +2,7 @@
     <!-- الإنترنت: ضرورية لـ Firebase والخطوط ولنسخة release -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="طبيبك للمراكز"
+        android:label="طبيبك"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
