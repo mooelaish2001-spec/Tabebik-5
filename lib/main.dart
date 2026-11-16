@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
 import 'firebase_options.dart';
 
 /// حالة اتصال Firebase. التطبيق يستطيع عرض الواجهة حتى لو تعذر الاتصال بالخادم.
@@ -1154,6 +1155,16 @@ class MapPage extends StatelessWidget {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // تفعيل اختيار صورة الملف الشخصي من المعرض/الكاميرا.
+  kPhotoPicker = (camera) async {
+    final image = await ImagePicker().pickImage(
+      source: camera ? ImageSource.camera : ImageSource.gallery,
+      maxWidth: 900,
+      imageQuality: 82,
+    );
+    return image == null ? null : await image.readAsBytes();
+  };
+
   // لا نسمح لفشل تهيئة Firebase بمنع ظهور واجهة التطبيق.
   try {
     await Firebase.initializeApp(
@@ -2124,7 +2135,7 @@ String fmtTime(int m) {
 const kDemoData = bool.fromEnvironment('DEMO_DATA', defaultValue: true);
 
 /// يعرض رمز التحقق على الشاشة (لا SMS فعلية في هذه النسخة). للإنتاج: --dart-define=DEMO_OTP=false
-const kDemoOtp = bool.fromEnvironment('DEMO_OTP', defaultValue: true);
+const kDemoOtp = bool.fromEnvironment('DEMO_OTP', defaultValue: false);
 
 // ───────────────────────── رمز التحقق (OTP) ─────────────────────────
 class _OtpEntry {
@@ -2270,13 +2281,28 @@ class UserAvatar extends StatelessWidget {
 }
 
 Future<void> _takePhoto(BuildContext ctx, bool camera) async {
-  final b = await kPhotoPicker!(camera);
-  if (b != null) {
-    app.photo = b;
-    app.avatar = 0;
-    app.ping();
+  try {
+    final picker = kPhotoPicker;
+    if (picker == null) {
+      snack(ctx, 'اختيار الصور غير مفعّل في هذه النسخة');
+      return;
+    }
+    final b = await picker(camera);
+    if (b != null) {
+      app.photo = b;
+      app.avatar = 0;
+      app.ping();
+      if (ctx.mounted) snack(ctx, 'تم تحديث الصورة الشخصية', ok: true);
+    }
+  } on PlatformException catch (e) {
+    debugPrint('Profile image picker failed: ${e.code} ${e.message}');
+    if (ctx.mounted) snack(ctx, 'تعذّر فتح الصور: ${e.message ?? e.code}');
+  } catch (e, st) {
+    debugPrint('Profile image picker error: $e\n$st');
+    if (ctx.mounted) snack(ctx, 'حدث خطأ أثناء اختيار الصورة');
+  } finally {
+    if (ctx.mounted && Navigator.of(ctx).canPop()) Navigator.pop(ctx);
   }
-  if (ctx.mounted) Navigator.pop(ctx);
 }
 
 /// ورقة اختيار الصورة الشخصية (كاميرا/معرض إن فُعّلت، وصور رمزية دائماً).
@@ -2371,13 +2397,36 @@ class _LoginState extends State<LoginScreen> {
         timeout: const Duration(seconds: 60),
         verificationCompleted: (credential) async {
           try {
-            await FirebaseAuth.instance.signInWithCredential(credential);
-          } catch (e) {
-            debugPrint('Automatic phone verification failed: $e');
+            final result = await FirebaseAuth.instance.signInWithCredential(credential);
+            final user = result.user;
+            if (user == null || !mounted) return;
+            Map<String, dynamic>? saved;
+            try {
+              final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+              saved = doc.data();
+            } catch (e) {
+              debugPrint('Auto-verification profile read failed: $e');
+            }
+            if (!mounted) return;
+            if (saved != null && (saved['name'] as String? ?? '').isNotEmpty) {
+              app.loadJson(saved);
+              app.ping();
+              home(context);
+            } else {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => NameScreen(n)),
+                (route) => false,
+              );
+            }
+          } catch (e, st) {
+            debugPrint('Automatic phone verification failed: $e\n$st');
+            if (mounted) setState(() => err = 'تعذّر إكمال التحقق التلقائي: $e');
           }
         },
         verificationFailed: (e) {
-          if (mounted) setState(() => err = e.message ?? 'تعذر إرسال رمز التحقق');
+          debugPrint('PHONE_AUTH_VERIFICATION_FAILED: ${e.code} ${e.message}');
+          if (mounted) setState(() => err = '${e.message ?? 'تعذر إرسال رمز التحقق'} [${e.code}]');
         },
         codeSent: (verificationId, resendToken) {
           if (mounted) go(context, OtpScreen(n, verificationId: verificationId));
@@ -2385,7 +2434,8 @@ class _LoginState extends State<LoginScreen> {
         codeAutoRetrievalTimeout: (verificationId) {},
       );
     } on FirebaseAuthException catch (e) {
-      if (mounted) setState(() => err = e.message ?? 'حدث خطأ في التحقق');
+      debugPrint('PHONE_AUTH_SEND_ERROR: ${e.code} ${e.message}');
+      if (mounted) setState(() => err = '${e.message ?? 'حدث خطأ في التحقق'} [${e.code}]');
     } catch (e) {
       if (mounted) setState(() => err = 'تعذر الاتصال بخدمة التحقق: $e');
     }
