@@ -1,3 +1,0 @@
-ضع هنا ملف google-services.json الخاص بهذا التطبيق (من Firebase Console).
-معرّف التطبيق (Package name) المطلوب تسجيله في Firebase:  app.tabibak.tabibak_center
-بدون الملف يعمل التطبيق بالوضع التجريبي ولا يتصل بـ Firebase.
