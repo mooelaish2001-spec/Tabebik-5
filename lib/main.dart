@@ -2448,6 +2448,11 @@ class _LoginState extends State<LoginScreen> {
       busy = true;
       err = null;
     });
+
+    // دع Flutter يرسم مؤشر التحميل قبل بدء اتصال Firebase.
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    if (!mounted) return;
+
     try {
       await send();
     } catch (e, st) {
