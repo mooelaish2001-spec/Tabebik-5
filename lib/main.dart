@@ -2402,7 +2402,12 @@ class _LoginState extends State<LoginScreen> {
             if (user == null || !mounted) return;
             Map<String, dynamic>? saved;
             try {
-              final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+              // لا تجعل بطء Firestore يمنع إكمال تسجيل الدخول بعد نجاح OTP.
+              final doc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .get()
+                  .timeout(const Duration(seconds: 8));
               saved = doc.data();
             } catch (e) {
               debugPrint('Auto-verification profile read failed: $e');
@@ -2426,10 +2431,18 @@ class _LoginState extends State<LoginScreen> {
         },
         verificationFailed: (e) {
           debugPrint('PHONE_AUTH_VERIFICATION_FAILED: ${e.code} ${e.message}');
-          if (mounted) setState(() => err = '${e.message ?? 'تعذر إرسال رمز التحقق'} [${e.code}]');
+          if (mounted) {
+            setState(() {
+              busy = false;
+              err = '${e.message ?? 'تعذر إرسال رمز التحقق'} [${e.code}]';
+            });
+          }
         },
         codeSent: (verificationId, resendToken) {
-          if (mounted) go(context, OtpScreen(n, verificationId: verificationId));
+          debugPrint('PHONE_AUTH_CODE_SENT: $n');
+          if (mounted) {
+            go(context, OtpScreen(n, verificationId: verificationId));
+          }
         },
         codeAutoRetrievalTimeout: (verificationId) {},
       );
