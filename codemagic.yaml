@@ -80,15 +80,7 @@ workflows:
             echo "Generating a new Android keystore for Tabebik..."
             KEYSTORE_PASSWORD="$(openssl rand -hex 24)"
 
-            keytool -genkeypair -v \\
-              -keystore "$KEYSTORE_PATH" \\
-              -storetype JKS \\
-              -storepass "$KEYSTORE_PASSWORD" \\
-              -keypass "$KEYSTORE_PASSWORD" \\
-              -keyalg RSA -keysize 2048 -validity 10000 \\
-              -alias tabebik \\
-              -dname "CN=Tabebik Android, OU=Mobile, O=Tabebik, L=Khartoum, ST=Khartoum, C=SD" \\
-              -noprompt
+            keytool -genkeypair -v -keystore "$KEYSTORE_PATH" -storetype JKS -storepass "$KEYSTORE_PASSWORD" -keypass "$KEYSTORE_PASSWORD" -keyalg RSA -keysize 2048 -validity 10000 -alias tabebik -dname "CN=Tabebik Android, OU=Mobile, O=Tabebik, L=Khartoum, ST=Khartoum, C=SD" -noprompt
 
             {
               echo "Keystore file: tabebik.keystore"
