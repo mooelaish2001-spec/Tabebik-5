@@ -23,10 +23,35 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            if (System.getenv("CI") == "true") {
+                storeFile = file(
+                    requireNotNull(System.getenv("CM_KEYSTORE_PATH")) {
+                        "CM_KEYSTORE_PATH is missing. Check Codemagic android_signing configuration."
+                    }
+                )
+                storePassword = requireNotNull(System.getenv("CM_KEYSTORE_PASSWORD")) {
+                    "CM_KEYSTORE_PASSWORD is missing from Codemagic."
+                }
+                keyAlias = requireNotNull(System.getenv("CM_KEY_ALIAS")) {
+                    "CM_KEY_ALIAS is missing from Codemagic."
+                }
+                keyPassword = requireNotNull(System.getenv("CM_KEY_PASSWORD")) {
+                    "CM_KEY_PASSWORD is missing from Codemagic."
+                }
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Debug signing for testing only. Configure a release keystore before publishing.
-            signingConfig = signingConfigs.getByName("debug")
+            // Use the uploaded Codemagic keystore in CI; keep debug signing for local testing.
+            signingConfig = if (System.getenv("CI") == "true") {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
