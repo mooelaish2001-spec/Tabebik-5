@@ -3,28 +3,31 @@ workflows:
     name: tabebik_user Android
     instance_type: mac_mini_m1
     max_build_duration: 30
+
     environment:
       flutter: stable
 
     scripts:
-      - name: Regenerate Android project and preserve Firebase config
+      - name: Prepare existing Android project
         script: |
           set -e
 
-          mkdir -p /tmp/tabebik_firebase
-          if [ -f android/app/google-services.json ]; then
-            cp android/app/google-services.json /tmp/tabebik_firebase/google-services.json
-          else
-            echo "ERROR: android/app/google-services.json is missing."
+          if [ ! -f android/app/google-services.json ]; then
+            echo "ERROR: Firebase google-services.json is missing."
             exit 1
           fi
 
-          rm -rf android
-          flutter create . --platforms=android --org com.tabebik --project-name tabebik_user
+          if [ ! -f android/app/build.gradle.kts ]; then
+            echo "ERROR: Existing Android Gradle file is missing."
+            exit 1
+          fi
 
-          mkdir -p android/app
-          cp /tmp/tabebik_firebase/google-services.json android/app/google-services.json
+          if [ ! -f android/gradlew ]; then
+            echo "ERROR: Android Gradle wrapper is missing."
+            exit 1
+          fi
 
+          chmod +x android/gradlew
           flutter clean
           flutter pub get
 
