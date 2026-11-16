@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "app.tabibak.tabibak_center"
+    namespace = "com.tabebik.tabebik_user"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,8 +20,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "app.tabibak.tabibak_center"
-        // Firebase Auth يتطلب minSdk 23 على الأقل
+        applicationId = "com.tabebik.tabebik_user"
+        // Firebase Auth requires minSdk 23 or higher.
         minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -30,7 +30,7 @@ android {
 
     buildTypes {
         release {
-            // للتجربة فقط: يُوقَّع بمفتاح debug. للنشر أنشئ مفتاح توقيع (راجع README_AR.md).
+            // Debug signing for testing only. Configure a release keystore before publishing.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -40,7 +40,7 @@ flutter {
     source = "../.."
 }
 
-// Firebase: يُفعَّل تلقائياً عند وجود google-services.json في هذا المجلد (وإلا يعمل التطبيق بالوضع التجريبي)
+// Enable Google Services when the Firebase config file exists.
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 }
