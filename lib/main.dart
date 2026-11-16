@@ -2372,22 +2372,24 @@ class _LoginState extends State<LoginScreen> {
   final ph = TextEditingController();
   String? err;
   bool busy = false;
+  Timer? phoneAuthWatchdog;
 
   @override
   void dispose() {
+    phoneAuthWatchdog?.cancel();
     ph.dispose();
     super.dispose();
   }
 
   Future<void> send() async {
     if (!firebaseReady) {
-      setState(() => err =
-          'فشل تشغيل Firebase: ${firebaseInitError ?? 'سبب غير معروف'}. راجع سجل التشغيل (Codemagic logs).');
+      setState(() { busy = false; err =
+          'فشل تشغيل Firebase: ${firebaseInitError ?? 'سبب غير معروف'}. راجع سجل التشغيل (Codemagic logs).'; });
       return;
     }
     final n = normPhone(ph.text);
     if (n == null) {
-      setState(() => err = 'أدخل رقم هاتف سوداني صحيح (مثال: 912345678)');
+      setState(() { busy = false; err = 'أدخل رقم هاتف سوداني صحيح (مثال: 912345678)'; });
       return;
     }
     setState(() => err = null);
@@ -2396,6 +2398,8 @@ class _LoginState extends State<LoginScreen> {
         phoneNumber: n,
         timeout: const Duration(seconds: 60),
         verificationCompleted: (credential) async {
+          phoneAuthWatchdog?.cancel();
+          if (mounted) setState(() => busy = false);
           try {
             final result = await FirebaseAuth.instance.signInWithCredential(credential);
             final user = result.user;
@@ -2430,6 +2434,7 @@ class _LoginState extends State<LoginScreen> {
           }
         },
         verificationFailed: (e) {
+          phoneAuthWatchdog?.cancel();
           debugPrint('PHONE_AUTH_VERIFICATION_FAILED: ${e.code} ${e.message}');
           if (mounted) {
             setState(() {
@@ -2439,18 +2444,24 @@ class _LoginState extends State<LoginScreen> {
           }
         },
         codeSent: (verificationId, resendToken) {
+          phoneAuthWatchdog?.cancel();
           debugPrint('PHONE_AUTH_CODE_SENT: $n');
           if (mounted) {
+            setState(() => busy = false);
             go(context, OtpScreen(n, verificationId: verificationId));
           }
         },
-        codeAutoRetrievalTimeout: (verificationId) {},
+        codeAutoRetrievalTimeout: (verificationId) {
+          debugPrint('PHONE_AUTH_AUTO_RETRIEVAL_TIMEOUT');
+        },
       );
     } on FirebaseAuthException catch (e) {
+      phoneAuthWatchdog?.cancel();
       debugPrint('PHONE_AUTH_SEND_ERROR: ${e.code} ${e.message}');
-      if (mounted) setState(() => err = '${e.message ?? 'حدث خطأ في التحقق'} [${e.code}]');
+      if (mounted) setState(() { busy = false; err = '${e.message ?? 'حدث خطأ في التحقق'} [${e.code}]'; });
     } catch (e) {
-      if (mounted) setState(() => err = 'تعذر الاتصال بخدمة التحقق: $e');
+      phoneAuthWatchdog?.cancel();
+      if (mounted) setState(() { busy = false; err = 'تعذر الاتصال بخدمة التحقق: $e'; });
     }
   }
 
@@ -2462,17 +2473,28 @@ class _LoginState extends State<LoginScreen> {
       err = null;
     });
 
-    // دع Flutter يرسم مؤشر التحميل قبل بدء اتصال Firebase.
+    // انتظر callback من Firebase؛ Future الخاص بـ verifyPhoneNumber
+    // قد ينتهي قبل وصول codeSent أو verificationFailed.
     await Future<void>.delayed(const Duration(milliseconds: 80));
     if (!mounted) return;
 
+    phoneAuthWatchdog?.cancel();
+    phoneAuthWatchdog = Timer(const Duration(seconds: 25), () {
+      if (!mounted || !busy) return;
+      debugPrint('PHONE_AUTH_CALLBACK_WATCHDOG_TIMEOUT');
+      setState(() {
+        busy = false;
+        err = 'لم يصل رد من خدمة Firebase خلال 25 ثانية. تحقق من إعدادات رقم الاختبار وSHA-1/SHA-256 واتصال الإنترنت.';
+      });
+    });
+
     try {
       await send();
+      // لا نوقف التحميل هنا: verifyPhoneNumber قد يرجع قبل تنفيذ callback.
     } catch (e, st) {
+      phoneAuthWatchdog?.cancel();
       debugPrint('LOGIN_SEND_UNHANDLED: $e\n$st');
-      if (mounted) setState(() => err = 'حدث خطأ أثناء التسجيل: $e');
-    } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() { busy = false; err = 'حدث خطأ أثناء التسجيل: $e'; });
     }
   }
 
