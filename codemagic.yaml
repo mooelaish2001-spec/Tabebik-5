@@ -64,6 +64,46 @@ workflows:
             exit 1
           fi
 
+      - name: Generate Tabebik Android keystore (one-time setup)
+        script: |
+          set -e
+
+          KEYSTORE_DIR="$CM_BUILD_DIR/build/keystore-setup"
+          KEYSTORE_PATH="$KEYSTORE_DIR/tabebik.keystore"
+          CREDENTIALS_PATH="$KEYSTORE_DIR/keystore-credentials.txt"
+
+          mkdir -p "$KEYSTORE_DIR"
+
+          if [ -f "$KEYSTORE_PATH" ]; then
+            echo "Keystore already exists in this build workspace; keeping it."
+          else
+            echo "Generating a new Android keystore for Tabebik..."
+            KEYSTORE_PASSWORD="$(openssl rand -hex 24)"
+
+            keytool -genkeypair -v \\
+              -keystore "$KEYSTORE_PATH" \\
+              -storetype JKS \\
+              -storepass "$KEYSTORE_PASSWORD" \\
+              -keypass "$KEYSTORE_PASSWORD" \\
+              -keyalg RSA -keysize 2048 -validity 10000 \\
+              -alias tabebik \\
+              -dname "CN=Tabebik Android, OU=Mobile, O=Tabebik, L=Khartoum, ST=Khartoum, C=SD" \\
+              -noprompt
+
+            {
+              echo "Keystore file: tabebik.keystore"
+              echo "Keystore password: $KEYSTORE_PASSWORD"
+              echo "Key alias: tabebik"
+              echo "Key password: $KEYSTORE_PASSWORD"
+            } > "$CREDENTIALS_PATH"
+            chmod 600 "$KEYSTORE_PATH" "$CREDENTIALS_PATH"
+          fi
+
+          echo "========== NEW KEYSTORE SHA FINGERPRINTS =========="
+          keytool -list -v -keystore "$KEYSTORE_PATH" -alias tabebik -storepass "$(sed -n 's/^Keystore password: //p' "$CREDENTIALS_PATH")" | grep -E "SHA1:|SHA256:"
+          echo "========== END KEYSTORE FINGERPRINTS =========="
+          echo "Keystore and its credentials are included in the build artifacts. Keep both private."
+
       - name: Build release APK with detailed diagnostics
         script: |
           set -e
@@ -113,4 +153,6 @@ workflows:
 
     artifacts:
       - build/**/outputs/**/*.apk
+      - build/keystore-setup/tabebik.keystore
+      - build/keystore-setup/keystore-credentials.txt
       - build/**/outputs/**/output-metadata.json
