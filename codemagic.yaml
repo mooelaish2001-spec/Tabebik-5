@@ -30,7 +30,7 @@ workflows:
           if [ ! -f android/gradlew ] || [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
             echo "Gradle Wrapper is incomplete. Generating wrapper files..."
 
-            WRAPPER_VERSION="8.10.2"
+            WRAPPER_VERSION="9.5.0"
             TEMP_DIR="$(mktemp -d)"
             mkdir -p "$TEMP_DIR/wrapper-project"
 
