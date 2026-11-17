@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
@@ -1170,6 +1171,14 @@ Future<void> main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.android,
     );
+    try {
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: AndroidProvider.playIntegrity,
+      );
+      debugPrint('Tabibak: App Check activated.');
+    } catch (e) {
+      debugPrint('Tabibak: App Check activation failed: $e');
+    }
     firebaseReady = true;
     firebaseInitError = null;
     debugPrint('Tabibak: Firebase initialized successfully.');
