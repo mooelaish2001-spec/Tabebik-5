@@ -2403,6 +2403,7 @@ class _LoginState extends State<LoginScreen> {
     }
     setState(() => err = null);
     try {
+      otpKey.currentState?.setDebugLog('REQUEST STARTED: verifyPhoneNumber بدأ طلب التحقق');
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: n,
         timeout: const Duration(seconds: 60),
@@ -2471,6 +2472,10 @@ class _LoginState extends State<LoginScreen> {
           );
           if (mounted) setState(() => busy = false);
         },
+      ).timeout(const Duration(seconds: 30));
+      // يميّز هذا السطر بين Future عالق وبين Future اكتمل دون وصول أي callback.
+      otpKey.currentState?.setDebugLog(
+        'REQUEST FUTURE RETURNED: انتهى استدعاء Firebase دون انتظار callback؛ ننتظر نتيجة التحقق.',
       );
     } on FirebaseAuthException catch (e) {
       phoneAuthWatchdog?.cancel();
