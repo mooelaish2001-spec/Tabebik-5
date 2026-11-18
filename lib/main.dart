@@ -2381,6 +2381,8 @@ class _LoginState extends State<LoginScreen> {
   final ph = TextEditingController();
   String? err;
   bool busy = false;
+  // يمنع بدء طلب Phone Auth أكثر من مرة في نفس شاشة تسجيل الدخول.
+  bool phoneAuthRequestStarted = false;
   Timer? phoneAuthWatchdog;
 
   @override
@@ -2391,6 +2393,10 @@ class _LoginState extends State<LoginScreen> {
   }
 
   Future<void> send(GlobalKey<_OtpState> otpKey) async {
+    if (phoneAuthRequestStarted == false) {
+      otpKey.currentState?.setDebugLog('FAILED: لم يتم تهيئة طلب التحقق بشكل صحيح');
+      return;
+    }
     if (!firebaseReady) {
       setState(() { busy = false; err =
           'فشل تشغيل Firebase: ${firebaseInitError ?? 'سبب غير معروف'}. راجع سجل التشغيل (Codemagic logs).'; });
@@ -2472,8 +2478,9 @@ class _LoginState extends State<LoginScreen> {
           );
           if (mounted) setState(() => busy = false);
         },
-      ).timeout(const Duration(seconds: 30));
-      // يميّز هذا السطر بين Future عالق وبين Future اكتمل دون وصول أي callback.
+      );
+      // قد يكتمل Future الخاص باستدعاء Android قبل callbacks؛ لا نعتبر ذلك فشلاً.
+      // يظل watchdog مسؤولاً عن إظهار انتهاء المهلة إذا لم يصل أي callback.
       otpKey.currentState?.setDebugLog(
         'REQUEST FUTURE RETURNED: انتهى استدعاء Firebase دون انتظار callback؛ ننتظر نتيجة التحقق.',
       );
@@ -2487,13 +2494,13 @@ class _LoginState extends State<LoginScreen> {
     } catch (e) {
       phoneAuthWatchdog?.cancel();
       otpKey.currentState?.setDebugLog('FAILED: unexpected error - $e');
-      otpKey.currentState?.setSendError('تعذر الاتصال بخدمة التحقق: $e');
-      if (mounted) setState(() { busy = false; err = 'تعذر الاتصال بخدمة التحقق: $e'; });
+      otpKey.currentState?.setSendError(e.toString());
+      if (mounted) setState(() { busy = false; err = e.toString(); });
     }
   }
 
   Future<void> handleSend() async {
-    if (busy) return;
+    if (busy || phoneAuthRequestStarted) return;
     final n = normPhone(ph.text);
     if (n == null) {
       setState(() => err = 'أدخل رقم هاتف سوداني صحيح (مثال: 912345678)');
@@ -2505,7 +2512,11 @@ class _LoginState extends State<LoginScreen> {
     }
 
     debugPrint('LOGIN_BUTTON_TAPPED');
-    setState(() { busy = true; err = null; });
+    setState(() {
+      busy = true;
+      phoneAuthRequestStarted = true;
+      err = null;
+    });
 
     // افتح صفحة الرمز فوراً، ثم ابدأ طلب التحقق في الخلفية.
     final otpKey = GlobalKey<_OtpState>();
