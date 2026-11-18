@@ -2416,8 +2416,11 @@ class _LoginState extends State<LoginScreen> {
     }
 
     if (!mounted) return;
-    app.createAccount(n, '');
-    home(context);
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => NameScreen(n)),
+      (route) => false,
+    );
   }
 
   @override
