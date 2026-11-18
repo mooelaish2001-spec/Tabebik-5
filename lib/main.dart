@@ -2512,6 +2512,7 @@ class _LoginState extends State<LoginScreen> {
     phoneAuthWatchdog = Timer(const Duration(seconds: 75), () {
       if (!mounted || !busy) return;
       const message = 'لم يكتمل التحقق من Firebase خلال 75 ثانية. ارجع وحاول مرة أخرى، وإذا ظهر خطأ محدد أرسله لنا.';
+      otpKey.currentState?.setDebugLog('NO CALLBACK: لم يصل رد من Firebase خلال 75 ثانية');
       otpKey.currentState?.setSendError(message);
       setState(() { busy = false; err = message; });
     });
@@ -2524,6 +2525,7 @@ class _LoginState extends State<LoginScreen> {
     } catch (e, st) {
       phoneAuthWatchdog?.cancel();
       debugPrint('LOGIN_SEND_UNHANDLED: $e\n$st');
+      otpKey.currentState?.setDebugLog('FAILED: unexpected error - $e');
       otpKey.currentState?.setSendError('حدث خطأ أثناء التسجيل: $e');
       if (mounted) setState(() { busy = false; err = 'حدث خطأ أثناء التسجيل: $e'; });
     }
