@@ -2668,28 +2668,42 @@ class _OtpState extends State<OtpScreen> {
       setState(() => err = 'أدخل الرمز المكوّن من $len أرقام');
       return;
     }
-    setState(() { busy = true; err = null; });
+    setState(() {
+      busy = true;
+      err = null;
+      debugLog = 'VERIFY STARTED: جاري فحص رمز التحقق...';
+    });
     try {
       final credential = PhoneAuthProvider.credential(
         verificationId: currentVerificationId,
         smsCode: code,
       );
-      await FirebaseAuth.instance.signInWithCredential(credential);
-      final user = FirebaseAuth.instance.currentUser;
+
+      setDebugLog('AUTH: جاري تأكيد الرمز مع Firebase...');
+      final authResult = await FirebaseAuth.instance
+          .signInWithCredential(credential)
+          .timeout(const Duration(seconds: 25));
+      final user = authResult.user;
       if (user == null) {
+        setDebugLog('AUTH FAILED: Firebase لم يُرجع مستخدماً بعد قبول الرمز');
         throw StateError('تم التحقق لكن لم يتم إنشاء جلسة تسجيل الدخول.');
       }
 
+      setDebugLog('AUTH OK: تم تسجيل الدخول بنجاح. جاري قراءة ملف المستخدم...');
       Map<String, dynamic>? saved;
       try {
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
-            .get();
+            .get()
+            .timeout(const Duration(seconds: 8));
         saved = userDoc.data();
+        setDebugLog(saved == null
+            ? 'FIRESTORE OK: لا يوجد ملف محفوظ. جاري فتح إنشاء الحساب...'
+            : 'FIRESTORE OK: تم تحميل ملف المستخدم.');
       } catch (e) {
-        // فشل قراءة Firestore لا يلغي نجاح التحقق برقم الهاتف.
         debugPrint('Could not load patient profile from Firestore: $e');
+        setDebugLog('AUTH OK / FIRESTORE ERROR: $e');
       }
 
       if (saved != null && (saved['name'] as String? ?? '').isNotEmpty) {
@@ -2698,13 +2712,16 @@ class _OtpState extends State<OtpScreen> {
           app.ping();
         } catch (e) {
           debugPrint('Could not restore cloud patient profile: $e');
+          setDebugLog('PROFILE RESTORE ERROR: $e');
           app.createAccount(widget.phone, '');
         }
         if (!mounted) return;
+        setDebugLog('LOGIN COMPLETE: جاري فتح الصفحة الرئيسية...');
         snack(context, 'أهلاً بعودتك ${app.first}', ok: true);
         home(context);
       } else {
         if (!mounted) return;
+        setDebugLog('AUTH COMPLETE: جاري الانتقال لصفحة إدخال الاسم...');
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => NameScreen(widget.phone)),
@@ -2712,9 +2729,23 @@ class _OtpState extends State<OtpScreen> {
         );
       }
     } on FirebaseAuthException catch (e) {
-      if (mounted) setState(() { err = e.message ?? 'رمز التحقق غير صحيح'; busy = false; });
+      debugPrint('Phone sign-in failed: ${e.code} - ${e.message}');
+      if (mounted) {
+        setState(() {
+          debugLog = 'FAILED VERIFY: ${e.code} - ${e.message ?? 'بدون تفاصيل'}';
+          err = e.message ?? 'رمز التحقق غير صحيح';
+          busy = false;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { err = 'تعذر إكمال تسجيل الدخول: $e'; busy = false; });
+      debugPrint('OTP verification flow failed: $e');
+      if (mounted) {
+        setState(() {
+          debugLog = 'VERIFY FLOW ERROR: $e';
+          err = 'تعذر إكمال تسجيل الدخول: $e';
+          busy = false;
+        });
+      }
     }
   }
 
