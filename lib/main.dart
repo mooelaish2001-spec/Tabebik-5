@@ -2408,6 +2408,7 @@ class _LoginState extends State<LoginScreen> {
         timeout: const Duration(seconds: 60),
         verificationCompleted: (credential) async {
           phoneAuthWatchdog?.cancel();
+          otpKey.currentState?.setDebugLog('AUTO VERIFIED: Firebase أكمل التحقق تلقائياً');
           if (mounted) setState(() => busy = false);
           try {
             final result = await FirebaseAuth.instance.signInWithCredential(credential);
@@ -2439,6 +2440,7 @@ class _LoginState extends State<LoginScreen> {
             }
           } catch (e, st) {
             debugPrint('Automatic phone verification failed: $e\n$st');
+            otpKey.currentState?.setDebugLog('FAILED AUTO SIGN-IN: $e');
             if (mounted) setState(() => err = 'تعذّر إكمال التحقق التلقائي: $e');
           }
         },
