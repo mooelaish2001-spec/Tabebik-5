@@ -37,9 +37,6 @@ class Fb {
 
   static bool on = false;
   static String initError = '';
-  static String? _vid;
-  static int? _token;
-  static String _lastPhone = '';
 
   static FirebaseFirestore get _db => FirebaseFirestore.instance;
   static FirebaseAuth get _auth => FirebaseAuth.instance;
@@ -72,64 +69,6 @@ class Fb {
   static Map<String, dynamic> _row(DocumentSnapshot<Map<String, dynamic>> d) => {...(_plain(d.data() ?? <String, dynamic>{}) as Map<String, dynamic>), 'id': d.id};
 
   static Stream<List<Map<String, dynamic>>> _watch(Query<Map<String, dynamic>> q) => q.snapshots().map((s) => [for (final d in s.docs) _row(d)]).handleError((_) {});
-
-  // ───────────────────────── التحقق بالهاتف ─────────────────────────
-  static String _msg(FirebaseAuthException e) => switch (e.code) {
-        'invalid-phone-number' => 'رقم الهاتف غير صالح',
-        'too-many-requests' => 'محاولات كثيرة، حاول لاحقاً',
-        'quota-exceeded' => 'تعذّر إرسال الرسالة الآن، حاول لاحقاً',
-        'invalid-verification-code' => 'الرمز غير صحيح',
-        'session-expired' || 'code-expired' => 'انتهت صلاحية الرمز، اطلب رمزاً جديداً',
-        'network-request-failed' => 'لا يوجد اتصال بالإنترنت',
-        'missing-client-identifier' || 'app-not-authorized' => 'التطبيق غير مهيّأ للتحقق بالهاتف (راجع إعدادات Firebase)',
-        _ => 'تعذّر التحقق (${e.code})',
-      };
-
-  /// يرسل رمز SMS إلى [phone] (+249XXXXXXXXX). onAuto عند التحقق التلقائي على أندرويد.
-  static Future<void> sendCode(String phone, {required void Function() onSent, required void Function(String) onError, void Function()? onAuto}) async {
-    if (phone != _lastPhone) {
-      _token = null;
-      _lastPhone = phone;
-    }
-    try {
-      await _auth.verifyPhoneNumber(
-        phoneNumber: phone,
-        timeout: const Duration(seconds: 60),
-        forceResendingToken: _token,
-        verificationCompleted: (cred) async {
-          try {
-            await _auth.signInWithCredential(cred);
-            onAuto?.call();
-          } catch (_) {}
-        },
-        verificationFailed: (e) => onError(_msg(e)),
-        codeSent: (id, token) {
-          _vid = id;
-          _token = token;
-          onSent();
-        },
-        codeAutoRetrievalTimeout: (id) {
-          _vid = id;
-        },
-      );
-    } catch (_) {
-      onError('تعذّر إرسال الرمز');
-    }
-  }
-
-  /// يتحقق من الرمز ويسجّل الدخول. يرجع null عند النجاح، وإلا رسالة الخطأ.
-  static Future<String?> verify(String code) async {
-    final id = _vid;
-    if (id == null) return 'اطلب رمزاً جديداً أولاً';
-    try {
-      await _auth.signInWithCredential(PhoneAuthProvider.credential(verificationId: id, smsCode: code));
-      return null;
-    } on FirebaseAuthException catch (e) {
-      return _msg(e);
-    } catch (_) {
-      return 'تعذّر التحقق';
-    }
-  }
 
   static Future<void> signOut() async {
     try {
