@@ -2381,172 +2381,43 @@ class _LoginState extends State<LoginScreen> {
   final ph = TextEditingController();
   String? err;
   bool busy = false;
-  // يمنع بدء طلب Phone Auth أكثر من مرة في نفس شاشة تسجيل الدخول.
-  bool phoneAuthRequestStarted = false;
-  Timer? phoneAuthWatchdog;
 
   @override
   void dispose() {
-    phoneAuthWatchdog?.cancel();
     ph.dispose();
     super.dispose();
   }
 
-  Future<void> send(GlobalKey<_OtpState> otpKey) async {
-    if (phoneAuthRequestStarted == false) {
-      otpKey.currentState?.setDebugLog('FAILED: لم يتم تهيئة طلب التحقق بشكل صحيح');
-      return;
-    }
-    if (!firebaseReady) {
-      setState(() { busy = false; err =
-          'فشل تشغيل Firebase: ${firebaseInitError ?? 'سبب غير معروف'}. راجع سجل التشغيل (Codemagic logs).'; });
-      return;
-    }
-    final n = normPhone(ph.text);
-    if (n == null) {
-      setState(() { busy = false; err = 'أدخل رقم هاتف سوداني صحيح (مثال: 912345678)'; });
-      return;
-    }
-    setState(() => err = null);
-    try {
-      otpKey.currentState?.setDebugLog('REQUEST STARTED: verifyPhoneNumber بدأ طلب التحقق');
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: n,
-        timeout: const Duration(seconds: 60),
-        verificationCompleted: (credential) async {
-          phoneAuthWatchdog?.cancel();
-          otpKey.currentState?.setDebugLog('AUTO VERIFIED: Firebase أكمل التحقق تلقائياً');
-          if (mounted) setState(() => busy = false);
-          try {
-            final result = await FirebaseAuth.instance.signInWithCredential(credential);
-            final user = result.user;
-            if (user == null || !mounted) return;
-            Map<String, dynamic>? saved;
-            try {
-              // لا تجعل بطء Firestore يمنع إكمال تسجيل الدخول بعد نجاح OTP.
-              final doc = await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(user.uid)
-                  .get()
-                  .timeout(const Duration(seconds: 8));
-              saved = doc.data();
-            } catch (e) {
-              debugPrint('Auto-verification profile read failed: $e');
-            }
-            if (!mounted) return;
-            if (saved != null && (saved['name'] as String? ?? '').isNotEmpty) {
-              app.loadJson(saved);
-              app.ping();
-              home(context);
-            } else {
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => NameScreen(n)),
-                (route) => false,
-              );
-            }
-          } catch (e, st) {
-            debugPrint('Automatic phone verification failed: $e\n$st');
-            otpKey.currentState?.setDebugLog('FAILED AUTO SIGN-IN: $e');
-            if (mounted) setState(() => err = 'تعذّر إكمال التحقق التلقائي: $e');
-          }
-        },
-        verificationFailed: (e) {
-          phoneAuthWatchdog?.cancel();
-          debugPrint('PHONE_AUTH_VERIFICATION_FAILED: ${e.code} ${e.message}');
-          final message = '${e.message ?? 'تعذر إرسال رمز التحقق'} [${e.code}]';
-          otpKey.currentState?.setDebugLog('FAILED: ${e.code} - ${e.message ?? 'لا توجد تفاصيل'}');
-          otpKey.currentState?.setSendError(message);
-          if (mounted) setState(() { busy = false; err = message; });
-        },
-        codeSent: (verificationId, resendToken) {
-          phoneAuthWatchdog?.cancel();
-          debugPrint('PHONE_AUTH_CODE_SENT: $n');
-          otpKey.currentState?.setVerificationId(verificationId);
-          otpKey.currentState?.setDebugLog('SENT OK: verificationId received');
-          if (mounted) setState(() => busy = false);
-        },
-        codeAutoRetrievalTimeout: (verificationId) {
-          phoneAuthWatchdog?.cancel();
-          debugPrint('PHONE_AUTH_AUTO_RETRIEVAL_TIMEOUT: verificationId received');
-          // Even if Android cannot auto-read the SMS, the verification ID
-          // can still be used with a manually entered test/received code.
-          otpKey.currentState?.setVerificationId(verificationId);
-          otpKey.currentState?.setDebugLog('TIMEOUT: verificationId received');
-          otpKey.currentState?.setSendError(
-            'انتهى التحقق التلقائي. إذا وصلك رمز SMS أدخله يدوياً.',
-          );
-          if (mounted) setState(() => busy = false);
-        },
-      );
-      // قد يكتمل Future الخاص باستدعاء Android قبل callbacks؛ لا نعتبر ذلك فشلاً.
-      // يظل watchdog مسؤولاً عن إظهار انتهاء المهلة إذا لم يصل أي callback.
-      otpKey.currentState?.setDebugLog(
-        'REQUEST FUTURE RETURNED: انتهى استدعاء Firebase دون انتظار callback؛ ننتظر نتيجة التحقق.',
-      );
-    } on FirebaseAuthException catch (e) {
-      phoneAuthWatchdog?.cancel();
-      debugPrint('PHONE_AUTH_SEND_ERROR: ${e.code} ${e.message}');
-      final message = '${e.message ?? 'حدث خطأ في التحقق'} [${e.code}]';
-      otpKey.currentState?.setDebugLog('FAILED: ${e.code} - ${e.message ?? 'لا توجد تفاصيل'}');
-      otpKey.currentState?.setSendError(message);
-      if (mounted) setState(() { busy = false; err = message; });
-    } catch (e) {
-      phoneAuthWatchdog?.cancel();
-      otpKey.currentState?.setDebugLog('FAILED: unexpected error - $e');
-      otpKey.currentState?.setSendError(e.toString());
-      if (mounted) setState(() { busy = false; err = e.toString(); });
-    }
-  }
-
-  Future<void> handleSend() async {
-    if (busy || phoneAuthRequestStarted) return;
+  Future<void> continueWithoutOtp() async {
+    if (busy) return;
     final n = normPhone(ph.text);
     if (n == null) {
       setState(() => err = 'أدخل رقم هاتف سوداني صحيح (مثال: 912345678)');
       return;
     }
-    if (!firebaseReady) {
-      setState(() => err = 'خدمة Firebase غير جاهزة: ${firebaseInitError ?? 'تحقق من الإعدادات'}');
-      return;
-    }
 
-    debugPrint('LOGIN_BUTTON_TAPPED');
     setState(() {
       busy = true;
-      phoneAuthRequestStarted = true;
       err = null;
     });
 
-    // افتح صفحة الرمز فوراً، ثم ابدأ طلب التحقق في الخلفية.
-    final otpKey = GlobalKey<_OtpState>();
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => OtpScreen(n, verificationId: '', key: otpKey),
-    ));
-
-    phoneAuthWatchdog?.cancel();
-    // Firebase Phone Auth timeout is 60 seconds; allow the native
-    // verification callbacks to complete before showing a timeout message.
-    phoneAuthWatchdog = Timer(const Duration(seconds: 75), () {
-      if (!mounted || !busy) return;
-      const message = 'لم يكتمل التحقق من Firebase خلال 75 ثانية. ارجع وحاول مرة أخرى، وإذا ظهر خطأ محدد أرسله لنا.';
-      otpKey.currentState?.setDebugLog('NO CALLBACK: لم يصل رد من Firebase خلال 75 ثانية');
-      otpKey.currentState?.setSendError(message);
-      setState(() { busy = false; err = message; });
-    });
-
-    try {
-      // انتظر حتى تُبنى صفحة OTP ويرتبط بها GlobalKey قبل عرض حالة الاتصال.
-      await WidgetsBinding.instance.endOfFrame;
-      otpKey.currentState?.setDebugLog('CALLING: جاري الاتصال بـ Firebase...');
-      await send(otpKey);
-    } catch (e, st) {
-      phoneAuthWatchdog?.cancel();
-      debugPrint('LOGIN_SEND_UNHANDLED: $e\n$st');
-      otpKey.currentState?.setDebugLog('FAILED: unexpected error - $e');
-      otpKey.currentState?.setSendError('حدث خطأ أثناء التسجيل: $e');
-      if (mounted) setState(() { busy = false; err = 'حدث خطأ أثناء التسجيل: $e'; });
+    // تسجيل دخول مجهول إلى Firebase لتوفير UID للحجوزات السحابية،
+    // من دون إرسال SMS أو طلب رمز تحقق من المستخدم.
+    if (firebaseReady) {
+      try {
+        if (FirebaseAuth.instance.currentUser == null) {
+          await FirebaseAuth.instance.signInAnonymously();
+        }
+      } catch (e) {
+        // لا نمنع فتح التطبيق إذا لم تكن المصادقة المجهولة مفعّلة؛
+        // سيعمل التطبيق محلياً، لكن مزامنة الحجوزات السحابية لن تعمل.
+        debugPrint('Anonymous Firebase sign-in unavailable: $e');
+      }
     }
+
+    if (!mounted) return;
+    app.createAccount(n, '');
+    home(context);
   }
 
   @override
@@ -2558,7 +2429,7 @@ class _LoginState extends State<LoginScreen> {
             child: ListView(padding: const EdgeInsets.fromLTRB(24, 24, 24, 16), children: [
               Center(child: Text('أهلاً بك في طبيبك', style: t(22))),
               gap(6),
-              Center(child: Text('سجّل رقم هاتفك مرة واحدة فقط، وبعدها يفتح التطبيق مباشرة على هذا الجهاز بدون تسجيل دخول.', textAlign: TextAlign.center, style: t(13, w: FontWeight.w500, c: kGrey, h: 1.7))),
+              Center(child: Text('أدخل رقم هاتفك للمتابعة إلى التطبيق مباشرة، بدون رمز تحقق.', textAlign: TextAlign.center, style: t(13, w: FontWeight.w500, c: kGrey, h: 1.7))),
               AppField('رقم الهاتف', controller: ph, hint: '9XX XXX XXX', icon: Icons.phone_outlined, type: TextInputType.phone, ltr: true, prefixText: '+249  ', fmt: [digitsFmt, LengthLimitingTextInputFormatter(14)], error: err, onChanged: (_) {
                 if (err != null) setState(() => err = null);
               }),
@@ -2567,7 +2438,7 @@ class _LoginState extends State<LoginScreen> {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: busy ? null : handleSend,
+                  onPressed: busy ? null : continueWithoutOtp,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kRed,
                     disabledBackgroundColor: const Color(0xFFD5DAE2),
@@ -2578,19 +2449,12 @@ class _LoginState extends State<LoginScreen> {
                     ),
                   ),
                   child: busy
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.4,
-                            color: Colors.white,
-                          ),
-                        )
+                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('موافقة ومتابعة', style: t(16, c: Colors.white)),
+                            Text('متابعة', style: t(16, c: Colors.white)),
                             const SizedBox(width: 8),
                             const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
                           ],
@@ -2598,7 +2462,10 @@ class _LoginState extends State<LoginScreen> {
                 ),
               ),
               gap(12),
-              OutBtn('المتابعة كزائر', onTap: () => home(context)),
+              OutBtn('المتابعة كزائر', onTap: () {
+                app.createAccount('', '');
+                home(context);
+              }),
               gap(18),
               Tap(
                 onTap: () => go(context, InfoScreen.terms()),
@@ -2606,263 +2473,6 @@ class _LoginState extends State<LoginScreen> {
               ),
             ]),
           ),
-        ]),
-      );
-}
-
-class OtpScreen extends StatefulWidget {
-  const OtpScreen(this.phone, {required this.verificationId, super.key});
-  final String phone; // +249XXXXXXXXX (normPhone)
-  final String verificationId;
-  @override
-  State<OtpScreen> createState() => _OtpState();
-}
-
-class _OtpState extends State<OtpScreen> {
-  static const len = 6;
-  final cs = List.generate(len, (_) => TextEditingController());
-  final fs = List.generate(len, (_) => FocusNode());
-  int left = 45;
-  Timer? timer;
-  String? err;
-  bool busy = false;
-  String demoCode = '';
-  String debugLog = 'في انتظار الإرسال...';
-  late String currentVerificationId;
-
-  void setDebugLog(String message) {
-    if (!mounted) return;
-    setState(() => debugLog = message);
-  }
-
-  void setVerificationId(String id) {
-    if (!mounted) return;
-    setState(() {
-      currentVerificationId = id;
-      err = null;
-    });
-  }
-
-  void setSendError(String message) {
-    if (!mounted) return;
-    setState(() => err = message);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    currentVerificationId = widget.verificationId;
-    timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (left > 0 && mounted) setState(() => left--);
-    });
-  }
-
-  @override
-  void dispose() {
-    timer?.cancel();
-    for (final c in cs) {
-      c.dispose();
-    }
-    for (final f in fs) {
-      f.dispose();
-    }
-    super.dispose();
-  }
-
-  Future<void> verify() async {
-    if (busy) return;
-    if (!firebaseReady) {
-      setState(() => err = 'خدمة التحقق غير متاحة بسبب إعدادات Firebase.');
-      return;
-    }
-    if (currentVerificationId.isEmpty) {
-      setState(() => err = 'جاري تجهيز التحقق من Firebase، انتظر قليلاً ثم أدخل الرمز.');
-      return;
-    }
-    final code = cs.map((c) => latin(c.text)).join();
-    if (code.length != len) {
-      setState(() => err = 'أدخل الرمز المكوّن من $len أرقام');
-      return;
-    }
-    setState(() {
-      busy = true;
-      err = null;
-      debugLog = 'VERIFY STARTED: جاري فحص رمز التحقق...';
-    });
-    try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: currentVerificationId,
-        smsCode: code,
-      );
-
-      setDebugLog('AUTH: جاري تأكيد الرمز مع Firebase...');
-      final authResult = await FirebaseAuth.instance
-          .signInWithCredential(credential)
-          .timeout(const Duration(seconds: 25));
-      final user = authResult.user;
-      if (user == null) {
-        setDebugLog('AUTH FAILED: Firebase لم يُرجع مستخدماً بعد قبول الرمز');
-        throw StateError('تم التحقق لكن لم يتم إنشاء جلسة تسجيل الدخول.');
-      }
-
-      setDebugLog('AUTH OK: تم تسجيل الدخول بنجاح. جاري قراءة ملف المستخدم...');
-      Map<String, dynamic>? saved;
-      try {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get()
-            .timeout(const Duration(seconds: 8));
-        saved = userDoc.data();
-        setDebugLog(saved == null
-            ? 'FIRESTORE OK: لا يوجد ملف محفوظ. جاري فتح إنشاء الحساب...'
-            : 'FIRESTORE OK: تم تحميل ملف المستخدم.');
-      } catch (e) {
-        debugPrint('Could not load patient profile from Firestore: $e');
-        setDebugLog('AUTH OK / FIRESTORE ERROR: $e');
-      }
-
-      if (saved != null && (saved['name'] as String? ?? '').isNotEmpty) {
-        try {
-          app.loadJson(saved);
-          app.ping();
-        } catch (e) {
-          debugPrint('Could not restore cloud patient profile: $e');
-          setDebugLog('PROFILE RESTORE ERROR: $e');
-          app.createAccount(widget.phone, '');
-        }
-        if (!mounted) return;
-        setDebugLog('LOGIN COMPLETE: جاري فتح الصفحة الرئيسية...');
-        snack(context, 'أهلاً بعودتك ${app.first}', ok: true);
-        home(context);
-      } else {
-        if (!mounted) return;
-        setDebugLog('AUTH COMPLETE: جاري الانتقال لصفحة إدخال الاسم...');
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => NameScreen(widget.phone)),
-          (r) => false,
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      debugPrint('Phone sign-in failed: ${e.code} - ${e.message}');
-      if (mounted) {
-        setState(() {
-          debugLog = 'FAILED VERIFY: ${e.code} - ${e.message ?? 'بدون تفاصيل'}';
-          err = e.message ?? 'رمز التحقق غير صحيح';
-          busy = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('OTP verification flow failed: $e');
-      if (mounted) {
-        setState(() {
-          debugLog = 'VERIFY FLOW ERROR: $e';
-          err = 'تعذر إكمال تسجيل الدخول: $e';
-          busy = false;
-        });
-      }
-    }
-  }
-
-  Future<void> resend() async {
-    if (left > 0) return;
-    if (!firebaseReady) {
-      setState(() => err = 'خدمة إعادة إرسال الرمز غير متاحة حالياً.');
-      return;
-    }
-    setState(() { left = 45; err = null; });
-    for (final c in cs) { c.clear(); }
-    fs[0].requestFocus();
-    try {
-      await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: widget.phone,
-      timeout: const Duration(seconds: 60),
-      verificationCompleted: (credential) async {
-        await FirebaseAuth.instance.signInWithCredential(credential);
-      },
-      verificationFailed: (e) {
-        if (mounted) setState(() => err = e.message ?? 'تعذر إعادة إرسال الرمز');
-      },
-      codeSent: (id, token) {
-        if (mounted) setState(() => currentVerificationId = id);
-        if (mounted) snack(context, 'تم إرسال رمز جديد', ok: true);
-      },
-      codeAutoRetrievalTimeout: (id) { currentVerificationId = id; },
-      );
-    } on FirebaseAuthException catch (e) {
-      if (mounted) setState(() => err = e.message ?? 'تعذر إعادة إرسال الرمز');
-    } catch (e) {
-      if (mounted) setState(() => err = 'تعذر إعادة إرسال الرمز: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => RedPage(
-        title: 'رمز التحقق',
-        bottomBar: btnBar(context, 'تأكيد', verify),
-        body: ListView(padding: const EdgeInsets.all(24), children: [
-          gap(6),
-          Center(child: gTile(Icons.verified_user_rounded, size: 78)),
-          gap(16),
-          Center(child: Text('أدخل رمز التحقق', style: t(20))),
-          gap(6),
-          Center(child: Text('أرسلنا رمزاً من $len أرقام إلى', style: t(13, w: FontWeight.w500, c: kGrey))),
-          Center(child: Directionality(textDirection: TextDirection.ltr, child: Text(fmtPhone(widget.phone), style: t(15, c: kInk)))),
-          gap(24),
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              for (var i = 0; i < len; i++)
-                Container(
-                  width: 46,
-                  height: 60,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: err != null ? kRed : kLine, width: 1.5), boxShadow: kShadow),
-                  child: TextField(
-                    controller: cs[i],
-                    focusNode: fs[i],
-                    textAlign: TextAlign.center,
-                    keyboardType: TextInputType.number,
-                    maxLength: 1,
-                    inputFormatters: [digitsFmt],
-                    style: t(22),
-                    decoration: const InputDecoration(border: InputBorder.none, counterText: ''),
-                    onChanged: (v) {
-                      if (err != null) setState(() => err = null);
-                      if (v.isNotEmpty && i < len - 1) fs[i + 1].requestFocus();
-                      if (v.isEmpty && i > 0) fs[i - 1].requestFocus();
-                      if (v.isNotEmpty && i == len - 1) verify();
-                    },
-                  ),
-                ),
-            ]),
-          ),
-          if (err != null) Padding(padding: const EdgeInsets.only(top: 10), child: Center(child: Text(err!, style: t(12, c: kRed)))),
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Center(
-              child: SelectableText(
-                debugLog,
-                textAlign: TextAlign.center,
-                style: t(11, c: debugLog.startsWith('SENT OK') ? Colors.green : kRed),
-              ),
-            ),
-          ),
-          gap(20),
-          Center(
-            child: left > 0
-                ? Text.rich(TextSpan(text: 'إعادة إرسال الرمز بعد ', style: t(12.5, w: FontWeight.w500, c: kGrey), children: [TextSpan(text: '00:${left.toString().padLeft(2, '0')}', style: t(12.5, c: kRed))]))
-                : Tap(onTap: resend, child: Padding(padding: const EdgeInsets.all(8), child: Text('إعادة إرسال الرمز', style: t(13.5, c: kRed)))),
-          ),
-          if (kDemoOtp) ...[
-            gap(14),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: kAmberBg, borderRadius: BorderRadius.circular(14)),
-              child: Text('وضع تجريبي: لا تُرسَل رسالة SMS فعلية.\nرمز التحقق: $demoCode', textAlign: TextAlign.center, style: t(12.5, c: kAmber, h: 1.7)),
-            ),
-          ],
         ]),
       );
 }
