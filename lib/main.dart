@@ -2446,6 +2446,7 @@ class _LoginState extends State<LoginScreen> {
           phoneAuthWatchdog?.cancel();
           debugPrint('PHONE_AUTH_VERIFICATION_FAILED: ${e.code} ${e.message}');
           final message = '${e.message ?? 'تعذر إرسال رمز التحقق'} [${e.code}]';
+          otpKey.currentState?.setDebugLog('FAILED: ${e.code} - ${e.message ?? 'لا توجد تفاصيل'}');
           otpKey.currentState?.setSendError(message);
           if (mounted) setState(() { busy = false; err = message; });
         },
@@ -2453,6 +2454,7 @@ class _LoginState extends State<LoginScreen> {
           phoneAuthWatchdog?.cancel();
           debugPrint('PHONE_AUTH_CODE_SENT: $n');
           otpKey.currentState?.setVerificationId(verificationId);
+          otpKey.currentState?.setDebugLog('SENT OK: verificationId received');
           if (mounted) setState(() => busy = false);
         },
         codeAutoRetrievalTimeout: (verificationId) {
@@ -2461,6 +2463,7 @@ class _LoginState extends State<LoginScreen> {
           // Even if Android cannot auto-read the SMS, the verification ID
           // can still be used with a manually entered test/received code.
           otpKey.currentState?.setVerificationId(verificationId);
+          otpKey.currentState?.setDebugLog('TIMEOUT: verificationId received');
           otpKey.currentState?.setSendError(
             'انتهى التحقق التلقائي. إذا وصلك رمز SMS أدخله يدوياً.',
           );
@@ -2471,10 +2474,13 @@ class _LoginState extends State<LoginScreen> {
       phoneAuthWatchdog?.cancel();
       debugPrint('PHONE_AUTH_SEND_ERROR: ${e.code} ${e.message}');
       final message = '${e.message ?? 'حدث خطأ في التحقق'} [${e.code}]';
+      otpKey.currentState?.setDebugLog('FAILED: ${e.code} - ${e.message ?? 'لا توجد تفاصيل'}');
       otpKey.currentState?.setSendError(message);
       if (mounted) setState(() { busy = false; err = message; });
     } catch (e) {
       phoneAuthWatchdog?.cancel();
+      otpKey.currentState?.setDebugLog('FAILED: unexpected error - $e');
+      otpKey.currentState?.setSendError('تعذر الاتصال بخدمة التحقق: $e');
       if (mounted) setState(() { busy = false; err = 'تعذر الاتصال بخدمة التحقق: $e'; });
     }
   }
@@ -2511,6 +2517,9 @@ class _LoginState extends State<LoginScreen> {
     });
 
     try {
+      // انتظر حتى تُبنى صفحة OTP ويرتبط بها GlobalKey قبل عرض حالة الاتصال.
+      await WidgetsBinding.instance.endOfFrame;
+      otpKey.currentState?.setDebugLog('CALLING: جاري الاتصال بـ Firebase...');
       await send(otpKey);
     } catch (e, st) {
       phoneAuthWatchdog?.cancel();
@@ -2598,7 +2607,13 @@ class _OtpState extends State<OtpScreen> {
   String? err;
   bool busy = false;
   String demoCode = '';
+  String debugLog = 'في انتظار الإرسال...';
   late String currentVerificationId;
+
+  void setDebugLog(String message) {
+    if (!mounted) return;
+    setState(() => debugLog = message);
+  }
 
   void setVerificationId(String id) {
     if (!mounted) return;
@@ -2773,6 +2788,16 @@ class _OtpState extends State<OtpScreen> {
             ]),
           ),
           if (err != null) Padding(padding: const EdgeInsets.only(top: 10), child: Center(child: Text(err!, style: t(12, c: kRed)))),
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Center(
+              child: SelectableText(
+                debugLog,
+                textAlign: TextAlign.center,
+                style: t(11, c: debugLog.startsWith('SENT OK') ? Colors.green : kRed),
+              ),
+            ),
+          ),
           gap(20),
           Center(
             child: left > 0
