@@ -2058,7 +2058,7 @@ class _OnboardingState extends State<OnboardingScreen> {
       );
 }
 
-// ───────────────────────── 3. Login / OTP / Register ─────────────────────────
+// ───────────────────────── 3. تسجيل المستخدم بدون OTP ─────────────────────────
 Widget authHeader({double height = 270}) => Container(
       height: height,
       width: double.infinity,
@@ -2406,7 +2406,7 @@ class _LoginState extends State<LoginScreen> {
     if (firebaseReady) {
       try {
         if (FirebaseAuth.instance.currentUser == null) {
-          await FirebaseAuth.instance.signInAnonymously();
+          await FirebaseAuth.instance.signInAnonymously().timeout(const Duration(seconds: 8));
         }
       } catch (e) {
         // لا نمنع فتح التطبيق إذا لم تكن المصادقة المجهولة مفعّلة؛
@@ -2464,11 +2464,6 @@ class _LoginState extends State<LoginScreen> {
                         ),
                 ),
               ),
-              gap(12),
-              OutBtn('المتابعة كزائر', onTap: () {
-                app.createAccount('', '');
-                home(context);
-              }),
               gap(18),
               Tap(
                 onTap: () => go(context, InfoScreen.terms()),
